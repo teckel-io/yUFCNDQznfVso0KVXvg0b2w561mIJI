@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<!--
+  index.html — THE PRACTICE PORTAL (V2): A THIN SHELL. A GENERATED FILE, built by teckel__build_localportal_v2_0.py
+  from localportal_blocks/v2/lv2_shell.html. ⚠ DO NOT HAND-EDIT: change the block and rebuild (--write); --check fails
+  when this file is stale.
+
+  This file carries only what is THIS practice's own: its name and its agent id (filled by provisioning and the publish
+  tools exactly as before, in the same places), its favicon and its address (the repo path, which stays the practice's
+  identity). The portal itself — its markup, style and scripts — is ONE CORE, shared by every practice on a channel:
+      https://benedict.teckel.io/practice_portal_core/stable/portal.9dbb7a54aa43.js
+  (channel "stable"; a core's file name carries the first 12 hex of its own sha256, so a published core never changes
+  under a page that names it). If the core does not load — an error, or no ready signal within 10 seconds — this page
+  says so in plain words (a core that arrives late still draws the page, and takes the line away).
+
+  Because the core is shared across every generation of this page, the core's hash can no longer tell one page
+  generation from the next — so the page states its own, in the core tag's data-teckel-page: sha256 of the finished
+  page with that one attribute blanked, first 12 hex. Anyone can recompute it from the page alone.
+
+  ⛔ THE ELEVENLABS PAIR (elevenlabs.html, elevenlabs_guide.html) NEVER LOADS THIS CORE and stays fully self-contained:
+  it is the incumbent, and each practice's fallback and migration path, so a core failure must never take it out with
+  this page.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- teckel default favicon -->
+    <link rel="icon" href="favicon.png" sizes="any">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PRACTICE_NAME}} — Management Portal</title>
+
+    <!--
+      The practice's name for the core's markup, exactly as provisioning filled it (a raw-text element: the core
+      receives the very characters the self-contained page carried, nothing decoded or re-encoded).
+    -->
+    <script type="text/plain" id="teckel-shell-name">{{PRACTICE_NAME}}</script>
+</head>
+<body>
+<p id="teckel-core-fail" role="alert" hidden style="margin:24px;font:16px/1.5 system-ui,sans-serif">Benedict couldn't load. Reload the page, or visit teckel.io/support.</p>
+<script>
+window.teckelShell = (function () {
+  // written(): the core's markup reached the parser, nothing more. ready() keeps the watchdog's old meaning and is
+  // now called by the PAGE itself, last, once its own init has run — a throw in the page's own init used to leave
+  // no line on screen, because ready() fired before any page script had run at all.
+  var done = false, errShortened = false, t = setTimeout(function () { fail("no ready signal in 10 s"); }, 10000);
+  function box() { return document.getElementById("teckel-core-fail"); }
+  function fail(why) {
+    if (done) return;
+    var b = box(); if (b) b.hidden = false;
+    try { console.warn("[teckel] the portal core did not load: " + why); } catch (e) {}
+  }
+  function onUncaught(reason) {
+    if (done) {
+      try { console.warn("[teckel] an uncaught error after the page came up: " + reason); } catch (e) {}
+      return;
+    }
+    try { console.warn("[teckel] an uncaught error before the page was ready: " + reason); } catch (e) {}
+    if (errShortened) return;            // taken once — a second error before ready() never extends the deadline
+    errShortened = true;
+    clearTimeout(t);
+    t = setTimeout(function () { fail("an uncaught error: " + reason); }, 1500);
+  }
+  window.addEventListener("error", function (e) { onUncaught(e && e.message ? e.message : "error"); });
+  window.addEventListener("unhandledrejection", function (e) {
+    onUncaught(e && e.reason ? String(e.reason) : "unhandled rejection");
+  });
+  return { channel: "stable", agent: "agent_PLACEHOLDER", fail: fail,
+           written: function () {},
+           ready: function () { done = true; clearTimeout(t); var b = box(); if (b) b.hidden = true; } };
+})();
+</script>
+<script data-teckel-core="9dbb7a54aa43" src="https://benedict.teckel.io/practice_portal_core/stable/portal.9dbb7a54aa43.js" data-teckel-page="f2cc4a83bdc4" integrity="sha384-Y5qREYGdIAJ5RB82rBVR42KiVErcQCt9fkNSqi2+OEOmTyIBOk3K8Cec4GWBwgoh" crossorigin="anonymous" onerror="window.teckelShell.fail('the file did not load')"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="favicon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Link can't be opened</title>
+<style>
+  :root { --navy:#0b2545; --gold:#c9a227; }
+  body { margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+         background:var(--navy); color:#eef3fb; min-height:100vh;
+         display:flex; flex-direction:column; }
+  header { padding:22px 28px; border-bottom:1px solid rgba(255,255,255,.15); }
+  header .name { font-size:1.25rem; font-weight:700; }
+  header .sub { font-size:.85rem; color:#b9c6dd; margin-top:2px; }
+  main { flex:1; display:flex; align-items:center; justify-content:center; padding:32px; }
+  .card { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+          border-radius:14px; padding:40px 36px; max-width:480px; text-align:center; }
+  .icon { font-size:2.4rem; }
+  h1 { font-size:1.3rem; margin:14px 0 8px; }
+  p { color:#c9d5ea; line-height:1.55; margin:0; }
+  footer { text-align:center; padding:16px; font-size:.78rem; color:#8fa2c4; }
+</style>
+</head>
+<body>
+<style>
+#tk-back-benedict{display:none;align-self:flex-start;margin:10px 12px 0;padding:8px 14px;border-radius:8px;border:1px solid #f0d060;background:#f0d060;color:#002349;font:600 14px/1.2 system-ui,-apple-system,'Segoe UI',sans-serif;text-decoration:none}
+</style>
+<a id="tk-back-benedict" href="./">&larr; Back to Benedict</a>
+<script>(function(){var a=document.getElementById('tk-back-benedict'),f=false;try{f=window.parent!==window;}catch(e){f=true;}if(f)return;a.href='/'+(location.pathname.split('/')[1]||'')+(location.pathname.split('/')[1]?'/':'');a.style.display='inline-block';})();</script>
+
+<header>
+  <div class="name">{{PRACTICE_NAME}}</div>
+</header>
+<main>
+  <div class="card">
+    <div class="icon">&#9888;&#65039;</div>
+    <h1>This link can't be opened</h1>
+    <p>The address looks incomplete or out of date. Please use the exact link you
+       were sent &mdash; opening it straight from your email or message is best &mdash;
+       or ask the practice for a fresh one.</p>
+  </div>
+</main>
+<footer>&copy; <a href="https://teckel.io" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">teckel.io</a></footer>
+</body>
+</html>

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<!--
+  teckel Document Analyser — ACCOUNT SETTINGS page.
+  Post-authentication practice settings menu, opened via the signed settings link
+  minted by get_settings_link (scope="settings", wallet-bound, short TTL).
+
+  Flow:
+    POST {API_BASE}/document_analyser/get_current_settings   (JSON: settings_token)
+    POST {API_BASE}/document_analyser/submit_setting         (JSON: settings_token, setting, value)
+    POST {API_BASE}/document_analyser/submit_setting_asset   (multipart: settings_token, setting, file)
+  No Bearer; the signed token IS the authority. Server-side the flag
+  DOCUMENT_ANALYSER_SETTINGS_MENU gates everything.
+
+  Self-contained: no external assets, everything inline, all dynamic text escaped.
+  Deployed as settings.html to each tenant's GitHub Pages repo (this MASTER is the source).
+  Degrades gracefully when the server lacks the reader/asset endpoints (404): the page
+  still allows the admin-email change.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+    <link rel="icon" href="favicon.png" sizes="any">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Account Settings — teckel</title>
+<style>
+  /* Visual language matches the portal (index.html / guide.html): deep navy, gold + steel
+     accents, translucent steel cards, system-ui. Single committed dark theme (no light mode). */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:        #002349;
+    --navy-deep:   #001a35;
+    --steel:       #b0c4de;
+    --gold:        #f0d060;
+    --white:       #ffffff;
+    --card-bg:     rgba(176, 196, 222, 0.05);
+    --card-border: rgba(176, 196, 222, 0.18);
+    --note-bg:     rgba(255, 200, 0, 0.08);
+  }
+  html, body {
+    background-color: var(--navy); color: var(--white);
+    font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    min-height: 100vh; -webkit-font-smoothing: antialiased; line-height: 1.5;
+  }
+  /* ---- Header band (matches index.html / guide.html) ---- */
+  header.site-header {
+    background-color: var(--navy-deep); padding: 18px 24px;
+    border-bottom: 1px solid var(--card-border);
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  }
+  header.site-header .eyebrow {
+    color: var(--gold); font-size: 11px; font-weight: 600;
+    letter-spacing: 2.5px; text-transform: uppercase;
+  }
+  header.site-header .practice-info { text-align: right; }
+  header.site-header .practice-name { color: var(--white); font-size: 22px; font-weight: 600; letter-spacing: 0.3px; }
+  header.site-header .practice-sub  { color: var(--steel); font-size: 13px; margin-top: 2px; }
+
+  .wrap { max-width: 640px; margin: 40px auto; padding: 0 24px 48px; }
+  .card { background-color: var(--card-bg); border: 1px solid var(--card-border);
+          border-radius: 14px; padding: 22px; margin-bottom: 16px; }
+  h1 { font-size: 26px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.3px; }
+  h2 { font-size: 20px; font-weight: 600; margin-bottom: 10px; color: var(--white);
+       border-bottom: 1px solid var(--card-border); padding-bottom: 8px; letter-spacing: 0.2px; }
+  p.sub { margin-bottom: 8px; color: var(--steel); font-size: .95rem; }
+  label { display: block; font-size: .78rem; color: var(--steel); letter-spacing: .5px;
+          text-transform: uppercase; margin: 12px 0 5px; }
+  input[type=email], input[type=text] {
+    width: 100%; padding: 11px 13px; border-radius: 9px;
+    border: 1px solid var(--card-border); background-color: rgba(176, 196, 222, 0.06);
+    color: var(--white); font-size: 1rem; font-family: inherit;
+  }
+  input[type=email]:focus, input[type=text]:focus { outline: none; border-color: var(--gold); }
+  input::placeholder { color: var(--steel); opacity: .55; }
+  input[disabled] { opacity: .5; }
+  /* Primary action = gold-filled (the portal's strong accent) */
+  .btn { display: inline-block; margin-top: 14px; background-color: var(--gold); color: var(--navy);
+         border: 0; border-radius: 9px; padding: 11px 20px; font-size: .95rem; font-weight: 700;
+         font-family: inherit; letter-spacing: .3px; cursor: pointer; transition: opacity .15s; }
+  .btn:hover { opacity: .88; }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  /* Secondary action = gold-outline (matches the portal's nav links) */
+  .filebtn { display: inline-block; margin-top: 10px; color: var(--gold);
+             border: 1px solid rgba(240, 208, 96, 0.4); border-radius: 6px; padding: 9px 16px;
+             cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+             text-transform: uppercase; transition: border-color .15s, background-color .15s; }
+  .filebtn:hover { border-color: var(--gold); background-color: rgba(240, 208, 96, 0.08); }
+  input[type=file] { display: none; }
+  .msg { margin-top: 12px; padding: 11px 13px; border-radius: 9px; font-size: .93rem; display: none; }
+  .msg.show { display: block; }
+  .msg.ok   { background-color: rgba(120, 220, 150, 0.12); color: #86e0a6; border: 1px solid rgba(120, 220, 150, 0.25); }
+  .msg.err  { background-color: rgba(230, 120, 120, 0.12); color: #f3a3a3; border: 1px solid rgba(230, 120, 120, 0.25); }
+  .msg.info { background-color: var(--note-bg); color: var(--steel); border: 1px solid var(--card-border); }
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: .93rem; color: var(--white); }
+  .row input[type=checkbox], .row input[type=radio] { width: 18px; height: 18px; accent-color: var(--gold); }
+  .soon { font-size: .68rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+          background-color: var(--note-bg); color: var(--gold); border-radius: 5px; padding: 3px 9px; vertical-align: middle; }
+  .thumb { max-height: 46px; max-width: 180px; display: block; margin-top: 10px; border-radius: 6px; border: 1px solid var(--card-border); }
+  .foot { text-align: center; margin-top: 24px; font-size: .75rem; color: var(--steel); opacity: .6; letter-spacing: .5px; }
+  @media (max-width: 560px) {
+    header.site-header { padding: 14px 18px; }
+    header.site-header .practice-name { font-size: 18px; }
+    .wrap { margin: 24px auto; }
+  }
+</style>
+</head>
+<body>
+<style>
+#tk-back-benedict{display:none;align-self:flex-start;margin:10px 12px 0;padding:8px 14px;border-radius:8px;border:1px solid #f0d060;background:#f0d060;color:#002349;font:600 14px/1.2 system-ui,-apple-system,'Segoe UI',sans-serif;text-decoration:none}
+</style>
+<a id="tk-back-benedict" href="./">&larr; Back to Benedict</a>
+<script>(function(){var a=document.getElementById('tk-back-benedict'),f=false;try{f=window.parent!==window;}catch(e){f=true;}if(f)return;a.style.display='inline-block';})();</script>
+
+<header class="site-header">
+  <div class="eyebrow">teckel &middot; document analyser</div>
+  <div class="practice-info">
+    <div class="practice-name" id="hdrPracticeName">{{PRACTICE_NAME}}</div>
+    <div class="practice-sub">Account settings &middot; secure &amp; private</div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="card">
+    <h1>Account Settings</h1>
+    <p class="sub">Private to your practice. Changes here apply to your whole account.</p>
+    <div class="msg info" id="pageMsg"></div>
+  </div>
+
+  <div class="card" id="emailCard">
+    <h2>Admin email</h2>
+    <p class="sub">Where Benedict sends your completed forms, reports and links.</p>
+    <label for="adminEmail">Practice admin email</label>
+    <input type="email" id="adminEmail" autocomplete="email" placeholder="you@yourpractice.co.uk">
+    <button class="btn" id="saveEmail">Save email</button>
+    <div class="msg" id="emailMsg"></div>
+  </div>
+
+  <div class="card" id="detailsCard">
+    <h2>Practice details</h2>
+    <!-- Precise strings are safest TYPED — dictation is the weakest
+         channel for digit runs (phone, CQC, GDC). These five write the letterhead profile
+         via the settings token; the practice NAME stays a voice action (its rename also
+         updates the portal pages, which the voice flow owns). Rows are EDITABILITY-GATED on
+         the server's `editable` list so this page is safe to deploy before or after the
+         matching server build. -->
+    <p class="sub">Shown in the letterhead of your rendered and submitted paperwork. The
+       contact email below is what&rsquo;s <em>printed on documents</em> &mdash; it&rsquo;s
+       separate from the admin email above, where Benedict sends your reports.</p>
+    <div class="msg" id="detailsCardMsg"></div>
+    <label for="pdAddress">Practice address</label>
+    <input type="text" id="pdAddress" disabled autocomplete="street-address" placeholder="">
+    <button class="btn" id="savePdAddress" style="display:none" data-setting="address" data-input="pdAddress">Save address</button>
+    <div class="msg" id="pdAddressMsg"></div>
+    <label for="pdPhone">Phone number</label>
+    <input type="text" id="pdPhone" disabled autocomplete="tel" placeholder="">
+    <button class="btn" id="savePdPhone" style="display:none" data-setting="phone" data-input="pdPhone">Save phone</button>
+    <div class="msg" id="pdPhoneMsg"></div>
+    <label for="pdEmail">Contact email (printed on your paperwork)</label>
+    <input type="email" id="pdEmail" disabled placeholder="">
+    <button class="btn" id="savePdEmail" style="display:none" data-setting="email" data-input="pdEmail">Save contact email</button>
+    <div class="msg" id="pdEmailMsg"></div>
+    <label for="pdCqc">CQC registration number</label>
+    <input type="text" id="pdCqc" disabled placeholder="">
+    <button class="btn" id="savePdCqc" style="display:none" data-setting="cqc_registration" data-input="pdCqc">Save CQC number</button>
+    <div class="msg" id="pdCqcMsg"></div>
+    <label for="pdGdc">GDC registration number</label>
+    <input type="text" id="pdGdc" disabled placeholder="">
+    <button class="btn" id="savePdGdc" style="display:none" data-setting="gdc_registration" data-input="pdGdc">Save GDC number</button>
+    <div class="msg" id="pdGdcMsg"></div>
+  </div>
+
+  <div class="card" id="logoCard">
+    <h2>Practice logo</h2>
+    <p class="sub">Shown on your rendered forms and letterhead. PNG or JPG, up to 2&nbsp;MB.</p>
+    <img id="logoThumb" class="thumb" alt="Current practice logo" style="display:none">
+    <label class="filebtn" for="logoFile">Choose logo…</label>
+    <input type="file" id="logoFile" accept=".png,.jpg,.jpeg">
+    <div class="row"><input type="checkbox" id="logoOnForms"><label for="logoOnForms" style="margin:0">Show on rendered forms</label></div>
+    <div class="row"><input type="checkbox" id="logoOnBanner"><label for="logoOnBanner" style="margin:0">Show on the website banner</label></div>
+    <div class="msg" id="logoMsg"></div>
+  </div>
+
+  <div class="card" id="favCard">
+    <h2>Favicon</h2>
+    <p class="sub">The little browser-tab icon for your practice portal. ICO or PNG, up to 2&nbsp;MB.</p>
+    <label class="filebtn" for="favFile">Choose favicon…</label>
+    <input type="file" id="favFile" accept=".ico,.png">
+    <div class="msg" id="favMsg"></div>
+  </div>
+
+  <div class="card" id="transcriptsCard">
+    <h2>Session transcripts</h2>
+    <!-- Text-transcripts opt-in. Provisioning defaults this
+         OFF; the checkbox stays disabled until the server lists text_transcripts as
+         editable, so an older server or a disabled deployment greys it out (same
+         deploy-order rule as the practice details). A failed save REVERTS the box —
+         a checkbox that shows ON when the flag never changed would be the display-card
+         fabrication class. Audio transcripts deliberately have no row yet. -->
+    <p class="sub">Receive a written transcript by email after each Benedict session.</p>
+    <div class="row"><input type="checkbox" id="textTranscripts" disabled><label for="textTranscripts" style="margin:0">Email text transcripts</label></div>
+    <div class="msg" id="transcriptsMsg"></div>
+  </div>
+
+  <div class="card" id="signaturesCard">
+    <h2>Who signs your forms</h2>
+    <!-- ⚠ WHY THIS LINK IS BUILT IN JS AND NOT HARD-CODED: signatures.html is authorised
+         by the SAME signed settings token this page carries (`_verify_settings_token`
+         server-side — NOT a Bearer, NOT the sign.html session token). A hard-coded link
+         straight to signatures.html lands on a page that cannot authenticate and shows an
+         error, which is worse than no link at all. The href is set below, only when the
+         token is present and unexpired.
+         ⚠ NO storage_key is passed deliberately. Without one the page shows "Your people"
+         — the staff roster — which is the step that must happen FIRST and is the only one
+         that makes sense outside a particular form. Choosing which forms they sign is
+         per-form and is reached through Benedict. -->
+    <p class="sub">Add the people at your practice who sign things, then choose which forms
+       they sign. Signing happens on screen, not on paper &mdash; ask Benedict to open a form
+       for signing when someone is with you.</p>
+    <div class="row"><a id="signaturesLink" class="btn" href="#" rel="noopener">Open signing setup</a></div>
+    <div class="msg" id="signaturesMsg"></div>
+  </div>
+
+  <div class="card" id="nameCard">
+    <h2>Practice name</h2>
+    <!-- Renames reach the portal website: the sync anchors on the name the page itself
+         displays as well as the previous DB name, so a diverged page self-heals on the
+         next rename. Typeable here as well as by voice. Both doors
+         run the SAME server handler, so both update the letterhead, the submitted forms
+         and the name on this portal website. The row stays read-only until the server
+         lists practice_name as editable, so an older server just greys it out. -->
+    <p class="sub">Type a new name here, or ask Benedict to change it by voice — either way
+       it updates your letterhead, your submitted forms, and the name shown on this portal
+       website.</p>
+    <input type="text" id="practiceName" disabled placeholder="">
+    <button class="btn" id="savePracticeName" style="display:none"
+            data-setting="practice_name" data-input="practiceName">Save practice name</button>
+    <div class="msg" id="practiceNameMsg"></div>
+  </div>
+
+  <div class="card" id="deviceCard">
+    <h2>On this device</h2>
+    <!-- A PER-DEVICE preference,
+         unlike every other card on this page: it is kept in THIS BROWSER (localStorage) and never sent to the server,
+         so it works with or without this page's link and changes nothing for the rest of the practice. The key is the
+         practice's own (teckel.directoryView__ + this page's folder: every practice's pages share one origin), and the
+         document directory (directory.html, the same folder) reads it. Every read and write in try/catch: a browser
+         that keeps nothing still gets the default, the traffic light, and is told so. -->
+    <p class="sub">Saved in this browser only &mdash; it does not change anything for the rest of your practice.</p>
+    <label id="dirViewLabel">Open the directory on</label>
+    <div role="radiogroup" aria-labelledby="dirViewLabel">
+      <div class="row"><input type="radio" name="dirView" id="dirViewTraffic" value="traffic"><label for="dirViewTraffic" style="margin:0">Traffic light</label></div>
+      <div class="row"><input type="radio" name="dirView" id="dirViewCategory" value="category"><label for="dirViewCategory" style="margin:0">By category</label></div>
+    </div>
+    <div class="msg" id="deviceMsg"></div>
+  </div>
+  <div class="foot">teckel Document Analyser — secure settings</div>
+</div>
+
+<script>
+"use strict";
+(function(){ var h = document.getElementById("hdrPracticeName");
+  if (h && h.textContent.indexOf("{{") !== -1) h.textContent = "Your practice"; })();
+var API_BASE  = "https://mcp2.bh.tkllabs.io:9779";
+var READ_URL  = API_BASE + "/document_analyser/get_current_settings";
+var SET_URL   = API_BASE + "/document_analyser/submit_setting";
+var ASSET_URL = API_BASE + "/document_analyser/submit_setting_asset";
+var MAX_BYTES = 2 * 1024 * 1024;
+
+var token = new URLSearchParams(location.search).get("token") || "";
+
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function showMsg(id, kind, text){
+  var m = el(id); m.className = "msg show " + kind; m.innerHTML = esc(text);
+}
+function hideMsg(id){ el(id).className = "msg"; }
+function userMessageFrom(xhr, fallback){
+  var body = {};
+  try { body = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+  var d = body.detail || body;
+  return (d && d.envelope && d.envelope.user_message) || (d && d.user_message) ||
+         (body && body.message) || fallback;
+}
+
+// --- Token presence / client-side expiry (same pattern as upload.html) ---
+function b64urlDecode(s){ s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; return atob(s); }
+function tokenExpired(t){
+  try { var p = JSON.parse(b64urlDecode(t.split(".")[0])); return typeof p.exp === "number" && (p.exp * 1000) < Date.now(); }
+  catch (e) { return false; }   // undecodable → let the server decide
+}
+function disablePage(text){
+  showMsg("pageMsg", "err", text);
+  ["adminEmail","saveEmail","logoFile","favFile","logoOnForms","logoOnBanner",
+   "textTranscripts",
+   "pdAddress","savePdAddress","pdPhone","savePdPhone","pdEmail","savePdEmail",
+   "pdCqc","savePdCqc","pdGdc","savePdGdc"].forEach(function(id){
+    var n = el(id); if (n) n.disabled = true;
+  });
+  document.querySelectorAll(".filebtn").forEach(function(n){ n.style.pointerEvents = "none"; n.style.opacity = ".5"; });
+}
+if (!token){
+  disablePage("This settings link is missing its security code. Please ask Benedict for a new settings link.");
+} else if (tokenExpired(token)) {
+  disablePage("This settings link has expired. Just ask Benedict for a new settings link — it only takes a moment.");
+}
+
+// --- Signing setup: carry THIS page's token through to signatures.html -------------
+// The signing-admin page is authorised by the same settings token, so the link is only
+// meaningful while that token is live. Built here rather than hard-coded in the markup so
+// a dead link is never rendered as a live one (the display-card fabrication class).
+(function(){
+  var a = el("signaturesLink");
+  if (!a) return;
+  if (!token || tokenExpired(token)){
+    a.removeAttribute("href");
+    a.setAttribute("disabled", "disabled");
+    var m = el("signaturesMsg");
+    if (m) m.textContent = "Ask Benedict for a fresh settings link to open this.";
+    return;
+  }
+  a.href = "signatures.html?token=" + encodeURIComponent(token);
+})();
+
+// --- Load current values (best-effort; a 404 means the server predates the reader) ---
+var suppressToggleEvents = true;
+function loadCurrent(){
+  if (!token || tokenExpired(token)) return;
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", READ_URL, true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onload = function(){
+    if (xhr.status >= 200 && xhr.status < 300){
+      var s = {}, ed = [];
+      try {
+        var resp = JSON.parse(xhr.responseText || "{}");
+        s  = resp.settings || {};
+        ed = resp.editable || [];
+      } catch (e) {}
+      if (s.admin_email) el("adminEmail").value = s.admin_email;
+      // Into .value, not just .placeholder: the field is editable now, and a
+      // user must be able to see and amend what is there rather than retype it blind.
+      if (s.practice_name) { el("practiceName").value = s.practice_name;
+                             el("practiceName").placeholder = s.practice_name;
+                             el("hdrPracticeName").textContent = s.practice_name; }
+      if (s.logo_ref){ el("logoThumb").src = s.logo_ref; el("logoThumb").style.display = "block"; }
+      el("logoOnForms").checked  = (s.logo_on_forms  !== false);
+      el("logoOnBanner").checked = (s.logo_on_banner !== false);
+      // Transcripts toggle: default-off mirror; enabled ONLY when the server
+      // lists it (older server / disabled deployment keeps the row greyed out).
+      el("textTranscripts").checked  = (s.text_transcripts === true);
+      el("textTranscripts").disabled = (ed.indexOf("text_transcripts") === -1);
+      // Practice details: populate, and enable each row ONLY when the server
+      // says it is editable (deploy-order safety: an older server keeps these read-only).
+      var pd = { address: "pdAddress", phone: "pdPhone", email: "pdEmail",
+                 cqc_registration: "pdCqc", gdc_registration: "pdGdc",
+                 practice_name: "practiceName" };
+      var anyLocked = false;
+      Object.keys(pd).forEach(function(field){
+        var input = el(pd[field]);
+        var btn = document.querySelector('#detailsCard .btn[data-setting="' + field + '"], '
+                                       + '#nameCard .btn[data-setting="' + field + '"]');
+        if (!input || !btn) return;
+        if (s[field]) input.value = s[field];
+        var ok = ed.indexOf(field) !== -1;
+        input.disabled = !ok;
+        btn.style.display = ok ? "" : "none";
+        if (!ok) anyLocked = true;
+      });
+      if (anyLocked){
+        showMsg("detailsCardMsg", "info",
+          "These details are read-only for the moment — ask Benedict to change them by voice.");
+      }
+      suppressToggleEvents = false;
+    } else {
+      // Older server or transient trouble: the page still works, fields just start blank.
+      showMsg("pageMsg", "info",
+        "Couldn't load your current values just now — you can still make changes below.");
+      suppressToggleEvents = false;
+    }
+  };
+  xhr.onerror = function(){
+    showMsg("pageMsg", "info",
+      "Couldn't load your current values just now — you can still make changes below.");
+    suppressToggleEvents = false;
+  };
+  xhr.send(JSON.stringify({ settings_token: token }));
+}
+loadCurrent();
+
+// --- Admin email ---
+el("saveEmail").addEventListener("click", function(){
+  var v = (el("adminEmail").value || "").trim();
+  hideMsg("emailMsg");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){
+    showMsg("emailMsg", "err", "That doesn't look like a complete email address. Please check it.");
+    return;
+  }
+  el("saveEmail").disabled = true;
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", SET_URL, true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onload = function(){
+    el("saveEmail").disabled = false;
+    if (xhr.status >= 200 && xhr.status < 300){
+      var r = {};
+      try { r = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+      var ok = r.success !== false;
+      showMsg("emailMsg", ok ? "ok" : "err",
+              r.message || r.user_message || userMessageFrom(xhr,
+                ok ? "Saved — your admin email is updated." : "Sorry, that didn't save. Please try again."));
+    } else {
+      showMsg("emailMsg", "err", userMessageFrom(xhr, "Sorry, that didn't save. Please try again."));
+    }
+  };
+  xhr.onerror = function(){
+    el("saveEmail").disabled = false;
+    showMsg("emailMsg", "err", "Couldn't reach the server. Please check your connection and try again.");
+  };
+  xhr.send(JSON.stringify({ settings_token: token, setting: "admin_email", value: v }));
+});
+
+// --- Practice details: one generic handler for the five profile rows. The
+// server does the real validation (email shape, regulator label-strip, wrong-box refusal)
+// and may return a cleaned value — echo it back into the box so what you SEE is what was
+// STORED. Soft-gates arrive as 200 + success:false + a user_message; style those as errors.
+document.querySelectorAll('#detailsCard .btn[data-setting], #nameCard .btn[data-setting]').forEach(function(btn){
+  btn.addEventListener("click", function(){
+    var field = btn.getAttribute("data-setting");
+    var input = el(btn.getAttribute("data-input"));
+    var v = (input && input.value || "").trim();
+    // Each row reports under ITS OWN Save button — the shared
+    // card-bottom message meant a phone save reported under the GDC button.
+    var msgId = btn.getAttribute("data-input") + "Msg";
+    ["pdAddressMsg","pdPhoneMsg","pdEmailMsg","pdCqcMsg","pdGdcMsg","practiceNameMsg"].forEach(hideMsg);
+    if (!v){ showMsg(msgId, "err", "Nothing to save — enter a value first."); return; }
+    if (field === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){
+      showMsg(msgId, "err", "That doesn't look like a complete email address. Please check it.");
+      return;
+    }
+    btn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", SET_URL, true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.onload = function(){
+      btn.disabled = false;
+      if (xhr.status >= 200 && xhr.status < 300){
+        var r = {};
+        try { r = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+        var ok = r.success !== false;
+        var msg = r.message || r.user_message || (r.error && r.error.user_message)
+                  || (ok ? "Saved." : "Sorry, that didn't save. Please try again.");
+        showMsg(msgId, ok ? "ok" : "err", msg);
+        if (ok && r.value && input) input.value = r.value;
+      } else {
+        showMsg(msgId, "err", userMessageFrom(xhr, "Sorry, that didn't save. Please try again."));
+      }
+    };
+    xhr.onerror = function(){
+      btn.disabled = false;
+      showMsg(msgId, "err", "Couldn't reach the server. Please check your connection and try again.");
+    };
+    xhr.send(JSON.stringify({ settings_token: token, setting: field, value: v }));
+  });
+});
+
+// --- Asset uploads (logo / favicon) ---
+function uploadAsset(fileInputId, setting, msgId, allowedExts){
+  var f = el(fileInputId).files[0];
+  if (!f) return;
+  hideMsg(msgId);
+  var ext = (f.name.lastIndexOf(".") >= 0 ? f.name.slice(f.name.lastIndexOf(".") + 1) : "").toLowerCase();
+  if (ext === "jpeg") ext = "jpg";
+  if (allowedExts.indexOf(ext) === -1){
+    showMsg(msgId, "err", "That file type isn't accepted here. Allowed: " + allowedExts.join(", ").toUpperCase() + ".");
+    return;
+  }
+  if (f.size > MAX_BYTES){
+    showMsg(msgId, "err", "That file is too large. Please choose an image under 2 MB.");
+    return;
+  }
+  showMsg(msgId, "info", "Uploading…");
+  var fd = new FormData();
+  fd.append("settings_token", token);
+  fd.append("setting", setting);
+  fd.append("file", f, f.name);
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", ASSET_URL, true);
+  xhr.onload = function(){
+    if (xhr.status >= 200 && xhr.status < 300){
+      showMsg(msgId, "ok", userMessageFrom(xhr, "Uploaded."));
+      if (setting === "logo"){
+        try {
+          var u = (JSON.parse(xhr.responseText || "{}").url) || "";
+          if (u){ el("logoThumb").src = u + "?v=" + Date.now(); el("logoThumb").style.display = "block"; }
+        } catch (e) {}
+      }
+    } else if (xhr.status === 404){
+      showMsg(msgId, "err", "This upload isn't switched on for your account just yet — it's coming very soon.");
+    } else {
+      showMsg(msgId, "err", userMessageFrom(xhr, "Sorry, that didn't upload. Please try again."));
+    }
+  };
+  xhr.onerror = function(){
+    showMsg(msgId, "err", "Couldn't reach the server. Please check your connection and try again.");
+  };
+  xhr.send(fd);
+}
+el("logoFile").addEventListener("change", function(){ uploadAsset("logoFile", "logo", "logoMsg", ["png","jpg"]); });
+el("favFile").addEventListener("change", function(){ uploadAsset("favFile", "favicon", "favMsg", ["ico","png"]); });
+
+// --- Display toggles ---
+function saveToggle(setting, checked, msgId){
+  if (suppressToggleEvents) return;
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", SET_URL, true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onload = function(){
+    if (xhr.status >= 200 && xhr.status < 300){
+      showMsg(msgId, "ok", userMessageFrom(xhr, "Preference saved."));
+    } else {
+      showMsg(msgId, "err", userMessageFrom(xhr, "Couldn't save that preference just now."));
+    }
+  };
+  xhr.onerror = function(){ showMsg(msgId, "err", "Couldn't reach the server just now."); };
+  xhr.send(JSON.stringify({ settings_token: token, setting: setting, value: checked ? "true" : "false" }));
+}
+el("logoOnForms").addEventListener("change", function(){ saveToggle("logo_on_forms",  el("logoOnForms").checked,  "logoMsg"); });
+el("logoOnBanner").addEventListener("change", function(){ saveToggle("logo_on_banner", el("logoOnBanner").checked, "logoMsg"); });
+// Transcripts toggle saves like the display toggles but REVERTS on failure:
+// the box must never show a state the backend flag doesn't hold.
+el("textTranscripts").addEventListener("change", function(){
+  if (suppressToggleEvents) return;
+  var box = el("textTranscripts"), wanted = box.checked;
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", SET_URL, true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onload = function(){
+    if (xhr.status >= 200 && xhr.status < 300){
+      showMsg("transcriptsMsg", "ok", userMessageFrom(xhr, "Preference saved."));
+    } else {
+      box.checked = !wanted;
+      showMsg("transcriptsMsg", "err", userMessageFrom(xhr, "Couldn't change that just now — nothing was saved."));
+    }
+  };
+  xhr.onerror = function(){
+    box.checked = !wanted;
+    showMsg("transcriptsMsg", "err", "Couldn't reach the server just now — nothing was saved.");
+  };
+  xhr.send(JSON.stringify({ settings_token: token, setting: "text_transcripts", value: wanted ? "true" : "false" }));
+});
+// --- On this device: where the document directory opens -----------------------
+// Kept in this browser only and never sent anywhere; works with no settings link at all. The key is the practice's
+// own (its folder), which directory.html in the same folder reads. Storage that throws: the default (the traffic
+// light) stands and the card says so.
+(function(){
+  var KEY = "teckel.directoryView__" + location.pathname.replace(/[^\/]*$/, "");
+  var t = el("dirViewTraffic"), c = el("dirViewCategory");
+  if (!t || !c) return;
+  var v = "", readable = true;
+  try { v = window.localStorage.getItem(KEY) || ""; } catch (e) { readable = false; }
+  (v === "category" ? c : t).checked = true;
+  if (!readable){
+    t.disabled = true; c.disabled = true;
+    showMsg("deviceMsg", "info", "This browser is not keeping settings, so the directory opens on the traffic light.");
+    return;
+  }
+  function save(val){
+    try {
+      window.localStorage.setItem(KEY, val);
+      showMsg("deviceMsg", "ok", val === "category" ? "Saved. On this device the directory opens by category."
+                                                    : "Saved. On this device the directory opens on the traffic light.");
+    } catch (e) {
+      t.checked = true;
+      showMsg("deviceMsg", "err", "This browser would not keep that, so the directory opens on the traffic light.");
+    }
+  }
+  t.addEventListener("change", function(){ if (t.checked) save("traffic"); });
+  c.addEventListener("change", function(){ if (c.checked) save("category"); });
+})();
+</script>
+<div style="text-align:center; color:#8aa0b8; opacity:.7; font-size:12px; padding:26px 0 18px;">&copy; <a href="https://teckel.io" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">teckel.io</a></div>
+</body>
+</html>
